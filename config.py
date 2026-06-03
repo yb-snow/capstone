@@ -17,7 +17,7 @@ VLM_BACKEND = os.getenv("VLM_BACKEND", "gemini")
 # Get your free API key at: https://aistudio.google.com/app/apikey
 # No credit card required — just a Google account
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL   = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+GEMINI_MODEL   = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 
 # ── Anthropic Claude (Optional) ───────────────────────────────────────────────
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
@@ -47,3 +47,38 @@ AUTO_APPROVE_THRESHOLD   = float(os.getenv("AUTO_APPROVE_THRESHOLD", "0.85"))
 # ── Auto-correction ───────────────────────────────────────────────────────────
 MAX_CORRECTION_ATTEMPTS = int(os.getenv("MAX_CORRECTION_ATTEMPTS", "2"))
 CROP_PADDING_PX         = int(os.getenv("CROP_PADDING_PX", "20"))
+
+
+# ── Runtime update helpers ────────────────────────────────────────────────────
+
+def apply(updates: dict) -> None:
+    """Update config values in memory AND persist to .env — no restart needed."""
+    import sys
+    module = sys.modules[__name__]
+
+    # 1. Update module-level attributes so all importers see the new values
+    for key, value in updates.items():
+        os.environ[key] = str(value)
+        if hasattr(module, key):
+            current = getattr(module, key)
+            try:
+                setattr(module, key, type(current)(value))
+            except (TypeError, ValueError):
+                setattr(module, key, value)
+
+    # 2. Persist to .env so values survive a restart
+    env_path = BASE_DIR / ".env"
+    try:
+        existing: dict[str, str] = {}
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, _, v = line.partition("=")
+                    existing[k.strip()] = v.strip()
+        existing.update({k: str(v) for k, v in updates.items()})
+        env_path.write_text(
+            "\n".join(f"{k}={v}" for k, v in existing.items()) + "\n"
+        )
+    except Exception:
+        pass   # write failure is non-fatal — in-memory update still works

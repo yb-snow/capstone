@@ -1,4 +1,4 @@
-"""SQLite storage with full audit trail: raw OCR, VLM extraction, corrections."""
+"""SQLite storage — CRUD, audit log, review queue, stats, and export."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from config import SQLITE_PATH
 from models.schemas import ProcessingRecord
@@ -22,16 +23,18 @@ def init_db() -> None:
     with _get_conn() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS invoice_records (
-                id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                document_id      TEXT UNIQUE NOT NULL,
-                source_path      TEXT,
-                raw_ocr_text     TEXT,
-                vlm_extraction   TEXT,
-                corrections      TEXT,
-                final_data       TEXT,
-                validation_status TEXT,
-                processing_notes TEXT,
-                created_at       TEXT DEFAULT (datetime('now'))
+                id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+                document_id           TEXT UNIQUE NOT NULL,
+                source_path           TEXT,
+                doc_type              TEXT DEFAULT 'invoice',
+                raw_ocr_text          TEXT,
+                vlm_extraction        TEXT,
+                corrections           TEXT,
+                final_data            TEXT,
+                validation_status     TEXT,
+                extraction_confidence REAL DEFAULT 0.0,
+                processing_notes      TEXT,
+                created_at            TEXT DEFAULT (datetime('now'))
             )
         """)
         conn.execute("""
@@ -43,38 +46,53 @@ def init_db() -> None:
                 timestamp   TEXT DEFAULT (datetime('now'))
             )
         """)
+        # Add new columns to existing DBs without failing
+        for col, typedef in [
+            ("doc_type",              "TEXT DEFAULT 'invoice'"),
+            ("extraction_confidence", "REAL DEFAULT 0.0"),
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE invoice_records ADD COLUMN {col} {typedef}")
+            except Exception:
+                pass  # column already exists
 
 
-def save_record(record: ProcessingRecord) -> int:
+# ── Write ─────────────────────────────────────────────────────────────────────
+
+def save_record(record: ProcessingRecord) -> None:
     with _get_conn() as conn:
-        cursor = conn.execute(
+        conn.execute(
             """
             INSERT INTO invoice_records
-                (document_id, source_path, raw_ocr_text, vlm_extraction,
-                 corrections, final_data, validation_status, processing_notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (document_id, source_path, doc_type, raw_ocr_text, vlm_extraction,
+                 corrections, final_data, validation_status, extraction_confidence,
+                 processing_notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(document_id) DO UPDATE SET
-                vlm_extraction   = excluded.vlm_extraction,
-                corrections      = excluded.corrections,
-                final_data       = excluded.final_data,
-                validation_status = excluded.validation_status,
-                processing_notes = excluded.processing_notes
+                doc_type              = excluded.doc_type,
+                vlm_extraction        = excluded.vlm_extraction,
+                corrections           = excluded.corrections,
+                final_data            = excluded.final_data,
+                validation_status     = excluded.validation_status,
+                extraction_confidence = excluded.extraction_confidence,
+                processing_notes      = excluded.processing_notes
             """,
             (
                 record.document_id,
                 record.source_path,
+                record.doc_type,
                 record.raw_ocr_text,
                 json.dumps(record.vlm_extraction),
                 json.dumps(record.corrections_applied),
                 json.dumps(record.final_data),
                 record.validation_status.value,
+                record.extraction_confidence,
                 json.dumps(record.processing_notes),
             ),
         )
-        return cursor.lastrowid
 
 
-def log_event(document_id: str, event: str, details: dict | None = None) -> None:
+def log_event(document_id: str, event: str, details: Optional[dict] = None) -> None:
     with _get_conn() as conn:
         conn.execute(
             "INSERT INTO audit_log (document_id, event, details) VALUES (?, ?, ?)",
@@ -82,7 +100,9 @@ def log_event(document_id: str, event: str, details: dict | None = None) -> None
         )
 
 
-def get_record(document_id: str) -> dict | None:
+# ── Read ──────────────────────────────────────────────────────────────────────
+
+def get_record(document_id: str) -> Optional[dict]:
     with _get_conn() as conn:
         row = conn.execute(
             "SELECT * FROM invoice_records WHERE document_id = ?", (document_id,)
@@ -90,9 +110,102 @@ def get_record(document_id: str) -> dict | None:
     return dict(row) if row else None
 
 
-def list_records(limit: int = 100) -> list[dict]:
+def list_records(limit: int = 200, status: Optional[str] = None) -> list[dict]:
+    with _get_conn() as conn:
+        if status:
+            rows = conn.execute(
+                "SELECT * FROM invoice_records WHERE validation_status = ? ORDER BY created_at DESC LIMIT ?",
+                (status, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM invoice_records ORDER BY created_at DESC LIMIT ?", (limit,)
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_pending_review(limit: int = 100) -> list[dict]:
+    return list_records(limit=limit, status="pending_review")
+
+
+def get_audit_trail(document_id: str) -> list[dict]:
     with _get_conn() as conn:
         rows = conn.execute(
-            "SELECT * FROM invoice_records ORDER BY created_at DESC LIMIT ?", (limit,)
+            "SELECT * FROM audit_log WHERE document_id = ? ORDER BY timestamp ASC",
+            (document_id,),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ── Review queue actions ──────────────────────────────────────────────────────
+
+def approve_record(document_id: str, updated_data: dict) -> None:
+    with _get_conn() as conn:
+        conn.execute(
+            """UPDATE invoice_records
+               SET validation_status = 'valid', final_data = ?
+               WHERE document_id = ?""",
+            (json.dumps(updated_data), document_id),
+        )
+    log_event(document_id, "approved", {"by": "human_reviewer"})
+
+
+def reject_record(document_id: str) -> None:
+    with _get_conn() as conn:
+        conn.execute(
+            "UPDATE invoice_records SET validation_status = 'rejected' WHERE document_id = ?",
+            (document_id,),
+        )
+    log_event(document_id, "rejected", {"by": "human_reviewer"})
+
+
+# ── Aggregates for dashboard ──────────────────────────────────────────────────
+
+def get_stats() -> dict:
+    with _get_conn() as conn:
+        total   = conn.execute("SELECT COUNT(*) FROM invoice_records").fetchone()[0]
+        valid   = conn.execute(
+            "SELECT COUNT(*) FROM invoice_records WHERE validation_status IN ('valid','corrected')"
+        ).fetchone()[0]
+        pending = conn.execute(
+            "SELECT COUNT(*) FROM invoice_records WHERE validation_status = 'pending_review'"
+        ).fetchone()[0]
+        today   = conn.execute(
+            "SELECT COUNT(*) FROM invoice_records WHERE created_at >= date('now')"
+        ).fetchone()[0]
+
+        by_type = conn.execute(
+            "SELECT doc_type, COUNT(*) as cnt FROM invoice_records GROUP BY doc_type"
+        ).fetchall()
+
+    return {
+        "total":        total,
+        "success_rate": round(valid / total * 100, 1) if total else 0.0,
+        "pending":      pending,
+        "today":        today,
+        "by_type":      {r["doc_type"]: r["cnt"] for r in by_type},
+    }
+
+
+# ── Export ────────────────────────────────────────────────────────────────────
+
+def export_json(document_id: str) -> str:
+    record = get_record(document_id)
+    if not record:
+        return "{}"
+    data = json.loads(record.get("final_data") or "{}")
+    return json.dumps(data, indent=2, default=str)
+
+
+def export_all_csv() -> str:
+    import csv, io
+    records = list_records(limit=10000)
+    if not records:
+        return ""
+    buf = io.StringIO()
+    fields = ["document_id", "source_path", "doc_type", "validation_status",
+              "extraction_confidence", "created_at"]
+    writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(records)
+    return buf.getvalue()

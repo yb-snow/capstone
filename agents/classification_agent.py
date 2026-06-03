@@ -7,11 +7,8 @@ import re
 
 from PIL import Image
 
-from config import (
-    ANTHROPIC_API_KEY, CLAUDE_MODEL,
-    GEMINI_API_KEY, GEMINI_MODEL,
-    VLM_BACKEND,
-)
+import config
+from config import ANTHROPIC_API_KEY, CLAUDE_MODEL, GEMINI_API_KEY, GEMINI_MODEL
 from utils.image_processing import image_to_base64
 
 _SCHEMA_MAP = {
@@ -47,9 +44,9 @@ class ClassificationResult:
 
 
 def run(image: Image.Image) -> ClassificationResult:
-    if VLM_BACKEND == "gemini":
+    if config.VLM_BACKEND == "gemini":
         return _classify_with_gemini(image)
-    elif VLM_BACKEND == "claude":
+    elif config.VLM_BACKEND == "claude":
         return _classify_with_claude(image)
     return _fallback_classify()
 
@@ -57,14 +54,14 @@ def run(image: Image.Image) -> ClassificationResult:
 # ── Gemini (free, recommended) ────────────────────────────────────────────────
 
 def _classify_with_gemini(image: Image.Image) -> ClassificationResult:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types
 
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel(GEMINI_MODEL)
-
-    response = model.generate_content(
-        [image, _CLASSIFICATION_PROMPT],
-        generation_config=genai.types.GenerationConfig(
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=[image, _CLASSIFICATION_PROMPT],
+        config=types.GenerateContentConfig(
             max_output_tokens=256,
             temperature=0.1,
         ),

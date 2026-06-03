@@ -1,0 +1,50 @@
+Acme Corp
+Global Supplies Inc
+Tech Solutions Ltd
+Office Depot
+Amazon Business
+Staples
+Dell Technologies
+Microsoft Corporation
+Adobe Systems
+Salesforce Inc
+Google LLC
+Apple Inc
+IBM Corporation
+Oracle Corporation
+SAP SE
+Cisco Systems
+HP Inc
+Lenovo Group
+Samsung Electronics
+Intel Corporation
+Nvidia Corporation
+Zoom Video Communications
+Slack Technologies
+Dropbox Inc
+DocuSign Inc
+Atlassian Corporation
+ServiceNow Inc
+Workday Inc
+Paylocity Corp
+ADP LLC
+FedEx Corporation
+UPS Supply Chain Solutions
+DHL Express
+W W Grainger Inc
+Fastenal Company
+McMaster-Carr Supply
+Uline Inc
+Quill Corporation
+Global Industrial Company
+Insight Direct
+CDW Corporation
+SHI International
+Connection Inc
+Zones LLC
+PC Mall Inc
+Softchoice Corporation
+Insight Enterprises
+Presidio Inc
+ePlus Technology
+World Wide Technology

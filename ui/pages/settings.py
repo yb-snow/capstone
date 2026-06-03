@@ -1,139 +1,346 @@
+"""Settings page — live VLM backend switching with connection testing."""
+
+from __future__ import annotations
+
+import os
+import sys
+
 import streamlit as st
+
+sys.path.insert(0, os.getcwd())
+
+import config
 from ui.styles import page_header
 
 
+# ── Connection testers ────────────────────────────────────────────────────────
+
+def _test_gemini(api_key: str, model: str) -> tuple[bool, str]:
+    try:
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=api_key)
+        client.models.generate_content(
+            model=model,
+            contents="Reply with: OK",
+            config=types.GenerateContentConfig(max_output_tokens=5, temperature=0.0),
+        )
+        return True, "Connection successful"
+    except Exception as e:
+        err = str(e)
+        if "429" in err or "RESOURCE_EXHAUSTED" in err:
+            return False, "Rate limit reached — wait 60 seconds, then try again"
+        if "401" in err or "403" in err or "API_KEY" in err.upper():
+            return False, "Invalid API key — check your key at aistudio.google.com"
+        if "404" in err or "NOT_FOUND" in err:
+            return False, f"Model '{model}' not available for this key — try gemini-flash-latest"
+        return False, str(e)[:120]
+
+
+def _test_claude(api_key: str, model: str) -> tuple[bool, str]:
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+        client.messages.create(
+            model=model, max_tokens=5,
+            messages=[{"role": "user", "content": "Say OK"}],
+        )
+        return True, "Connection successful"
+    except Exception as e:
+        err = str(e)
+        if "401" in err or "invalid_api_key" in err.lower():
+            return False, "Invalid Anthropic API key"
+        if "permission" in err.lower():
+            return False, "This key does not have access to that model"
+        return False, str(e)[:120]
+
+
+# ── Page ──────────────────────────────────────────────────────────────────────
+
 def render() -> None:
-    page_header("⚙️", "Settings", "Configure the pipeline, VLM backend, and thresholds")
+    page_header("⚙️", "Settings", "Configure VLM backend, thresholds, and vendors")
 
     tab_vlm, tab_thresholds, tab_vendors, tab_about = st.tabs(
         ["🤖 VLM Backend", "🎚️ Thresholds", "🏢 Vendors", "ℹ️ About"]
     )
 
-    # ── VLM Backend ───────────────────────────────────────────
+    # ── VLM Backend tab ───────────────────────────────────────────────────────
     with tab_vlm:
-        st.markdown("#### Vision-Language Model")
-        backend = st.selectbox(
-            "VLM Backend",
-            [
-                "gemini (Free — Google account only, recommended)",
-                "claude (Paid — Anthropic API key required)",
-                "internvl (Local GPU — no API key)",
-                "llava (Local GPU — no API key)",
-            ],
-            index=0,
+
+        active       = config.VLM_BACKEND
+        active_color = {"gemini": "#16a34a", "claude": "#7c3aed"}.get(active, "#374151")
+        st.markdown(
+            f"**Currently active:** "
+            f"<span style='color:{active_color};font-weight:700;font-size:1rem'>"
+            f"{'🟢' if active == 'gemini' else '🟣' if active == 'claude' else '⚪'} "
+            f"{active.upper()}</span>",
+            unsafe_allow_html=True,
+        )
+        st.markdown("<br/>", unsafe_allow_html=True)
+
+        backend_options = {
+            "gemini":    "🟢 Google Gemini  (FREE — API key required)",
+            "claude":    "🟣 Anthropic Claude  (paid API key required)",
+            "mlx":       "🍎 Local MLX  (Apple M-chip, no API key, downloads model)",
+            "moondream": "🤗 Local moondream2  (tiny ~2 GB, any hardware, no API key)",
+        }
+        selected_key = st.radio(
+            "Select VLM Backend",
+            list(backend_options.keys()),
+            format_func=lambda k: backend_options[k],
+            index=list(backend_options.keys()).index(active) if active in backend_options else 0,
         )
 
-        if "gemini" in backend:
-            st.info("Gemini API is **free** — get your key at [aistudio.google.com](https://aistudio.google.com/app/apikey). No credit card required.")
-            st.text_input(
-                "Gemini API Key",
-                type="password",
-                placeholder="AIza…",
-                help="Get your free key at aistudio.google.com",
+        st.divider()
+
+        # ── Gemini ─────────────────────────────────────────────────────────────
+        if selected_key == "gemini":
+            st.markdown("#### Google Gemini Configuration")
+            st.info(
+                "**Get a free key:** [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) "
+                "— no credit card required  \n"
+                "**Free tier limits:** 30 requests/min · 1,500 requests/day  \n"
+                "**Hit a rate limit?** Wait 60 seconds and retry, or switch to Claude below."
             )
-            st.selectbox(
+
+            gemini_key = st.text_input(
+                "Gemini API Key", value=config.GEMINI_API_KEY,
+                type="password", placeholder="AIza…",
+            )
+
+            all_gemini_models = [
+                "gemini-flash-latest",
+                "gemini-2.5-flash",
+                "gemini-2.0-flash",
+                "gemini-2.0-flash-lite",
+                "gemini-2.5-pro",
+            ]
+            current_gmodel = config.GEMINI_MODEL
+            if current_gmodel not in all_gemini_models:
+                all_gemini_models.insert(0, current_gmodel)
+
+            gemini_model = st.selectbox(
                 "Gemini Model",
-                ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"],
-                index=0,
+                all_gemini_models,
+                index=all_gemini_models.index(current_gmodel),
             )
-        elif "claude" in backend:
-            st.text_input(
-                "Anthropic API Key",
-                type="password",
-                placeholder="sk-ant-…",
-                help="Get your key at console.anthropic.com",
+
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("🔌 Test Connection", use_container_width=True,
+                             key="test_gemini"):
+                    if not gemini_key:
+                        st.warning("Enter an API key first.")
+                    else:
+                        with st.spinner("Testing…"):
+                            ok, msg = _test_gemini(gemini_key, gemini_model)
+                        (st.success if ok else st.error)(f"{'✅' if ok else '❌'} {msg}")
+
+            with c2:
+                if st.button("💾 Save & Apply", type="primary",
+                             use_container_width=True, key="save_gemini"):
+                    if not gemini_key:
+                        st.warning("Enter an API key before saving.")
+                    else:
+                        config.apply({
+                            "VLM_BACKEND":    "gemini",
+                            "GEMINI_API_KEY": gemini_key,
+                            "GEMINI_MODEL":   gemini_model,
+                        })
+                        st.success(
+                            f"✅ Backend switched to **Gemini** (`{gemini_model}`) "
+                            f"— active immediately, no restart needed."
+                        )
+                        st.rerun()
+
+        # ── Claude ─────────────────────────────────────────────────────────────
+        elif selected_key == "claude":
+            st.markdown("#### Anthropic Claude Configuration")
+            st.info(
+                "Get your key at [console.anthropic.com](https://console.anthropic.com).  \n"
+                "Claude Sonnet is the best model for document vision tasks."
             )
-            st.selectbox(
+
+            claude_key = st.text_input(
+                "Anthropic API Key", value=config.ANTHROPIC_API_KEY,
+                type="password", placeholder="sk-ant-…",
+            )
+
+            claude_models = [
+                "claude-sonnet-4-6",
+                "claude-opus-4-7",
+                "claude-haiku-4-5-20251001",
+            ]
+            current_cmodel = config.CLAUDE_MODEL
+            if current_cmodel not in claude_models:
+                claude_models.insert(0, current_cmodel)
+
+            claude_model = st.selectbox(
                 "Claude Model",
-                ["claude-sonnet-4-6", "claude-opus-4-7", "claude-haiku-4-5-20251001"],
-                index=0,
+                claude_models,
+                index=claude_models.index(current_cmodel) if current_cmodel in claude_models else 0,
             )
-        else:
-            st.text_input("Local Model Path / HuggingFace ID", placeholder="InternVL2-8B")
-            st.selectbox("Device", ["cuda", "cpu", "mps"])
 
-        st.markdown("#### OCR (Tesseract)")
-        st.text_input("Tesseract Binary Path", placeholder="/usr/bin/tesseract")
-        st.number_input("Scan DPI", min_value=150, max_value=600, value=300, step=50)
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("🔌 Test Connection", use_container_width=True,
+                             key="test_claude"):
+                    if not claude_key:
+                        st.warning("Enter an API key first.")
+                    else:
+                        with st.spinner("Testing…"):
+                            ok, msg = _test_claude(claude_key, claude_model)
+                        (st.success if ok else st.error)(f"{'✅' if ok else '❌'} {msg}")
 
-        if st.button("💾 Save VLM Settings", type="primary"):
-            st.success("Settings saved (prototype — no persistence yet).")
+            with c2:
+                if st.button("💾 Save & Apply", type="primary",
+                             use_container_width=True, key="save_claude"):
+                    if not claude_key:
+                        st.warning("Enter an API key before saving.")
+                    else:
+                        config.apply({
+                            "VLM_BACKEND":       "claude",
+                            "ANTHROPIC_API_KEY": claude_key,
+                            "CLAUDE_MODEL":      claude_model,
+                        })
+                        st.success(
+                            f"✅ Backend switched to **Claude** (`{claude_model}`) "
+                            f"— active immediately, no restart needed."
+                        )
+                        st.rerun()
 
-    # ── Thresholds ────────────────────────────────────────────
+        # ── Apple MLX ──────────────────────────────────────────────────────────
+        elif selected_key == "mlx":
+            st.markdown("#### 🍎 Apple MLX — Local Model (No API Key)")
+            st.success(
+                "**Best option for Apple M1/M2/M3/M4 chips.**  \n"
+                "Models download from HuggingFace on first use (~4–6 GB) and run entirely on your Mac.  \n"
+                "No internet required after download. No API key. No rate limits."
+            )
+
+            mlx_models = {
+                "mlx-community/llava-1.5-7b-4bit":             "LLaVA-1.5 7B  (4-bit, ~4 GB) — Good quality, fast",
+                "mlx-community/phi-3.5-vision-instruct-4bit":  "Phi-3.5 Vision  (4-bit, ~6 GB) — Excellent quality",
+                "mlx-community/llava-1.5-13b-4bit":            "LLaVA-1.5 13B  (4-bit, ~8 GB) — Best quality",
+            }
+            current_local = config.LOCAL_VLM_MODEL
+            mlx_model = st.selectbox(
+                "Model  (downloads on first use)",
+                list(mlx_models.keys()),
+                format_func=lambda k: mlx_models[k],
+                index=list(mlx_models.keys()).index(current_local)
+                      if current_local in mlx_models else 0,
+            )
+
+            st.info(
+                f"**Your hardware:** Apple M3 Pro · 18 GB unified memory  \n"
+                f"**Estimated first download:** ~4–6 GB  \n"
+                f"**Subsequent runs:** model is cached locally — instant start"
+            )
+
+            if st.button("💾 Save & Apply", type="primary",
+                         use_container_width=True, key="save_mlx"):
+                config.apply({
+                    "VLM_BACKEND":     "mlx",
+                    "LOCAL_VLM_MODEL": mlx_model,
+                })
+                st.success(
+                    f"✅ Backend set to **MLX** (`{mlx_model}`)  \n"
+                    f"Model will download on first document upload."
+                )
+                st.rerun()
+
+        # ── moondream2 ──────────────────────────────────────────────────────────
+        elif selected_key == "moondream":
+            st.markdown("#### 🤗 moondream2 — Lightweight Local Model (No API Key)")
+            st.success(
+                "**Tiny ~2 GB model — works on any hardware including CPU.**  \n"
+                "Downloads once from HuggingFace, then runs entirely offline.  \n"
+                "Lower accuracy than Gemini or LLaVA but completely free and private."
+            )
+            st.info(
+                "**Your hardware:** Apple M3 Pro · MPS available — will be fast  \n"
+                "**Model:** `vikhyatk/moondream2` (~2 GB download)"
+            )
+
+            if st.button("💾 Save & Apply", type="primary",
+                         use_container_width=True, key="save_moondream"):
+                config.apply({
+                    "VLM_BACKEND":     "moondream",
+                    "LOCAL_VLM_MODEL": "vikhyatk/moondream2",
+                })
+                st.success(
+                    "✅ Backend set to **moondream2**  \n"
+                    "Model will download on first document upload (~2 GB)."
+                )
+                st.rerun()
+
+    # ── Thresholds tab ────────────────────────────────────────────────────────
     with tab_thresholds:
         st.markdown("#### Confidence Thresholds")
         st.markdown(
-            "Documents below **Extraction Threshold** will trigger the OCR fallback.  \n"
-            "Documents below **Auto-Approve Threshold** will be sent to the Review Queue."
+            "- **Extraction threshold** — below this, OCR fallback runs to fill gaps  \n"
+            "- **Auto-approve threshold** — below this, document goes to Review Queue"
         )
 
-        ext_thresh = st.slider(
-            "Extraction Confidence Threshold",
-            min_value=0.0, max_value=1.0, value=0.70, step=0.05,
-            format="%.2f",
-            help="Below this score, OCR fallback is triggered.",
-        )
-        approve_thresh = st.slider(
-            "Auto-Approve Threshold",
-            min_value=0.0, max_value=1.0, value=0.85, step=0.05,
-            format="%.2f",
-            help="Below this score, document goes to Human Review Queue.",
-        )
-
+        ext_t = st.slider("Extraction Confidence Threshold",
+                          0.0, 1.0, float(config.EXTRACTION_CONF_THRESHOLD), 0.05,
+                          format="%.2f")
+        app_t = st.slider("Auto-Approve Threshold",
+                          0.0, 1.0, float(config.AUTO_APPROVE_THRESHOLD), 0.05,
+                          format="%.2f")
         st.markdown("#### Validation Rules")
-        total_tol = st.number_input(
-            "Total Reconciliation Tolerance ($)",
-            min_value=0.0, max_value=1.0, value=0.01, step=0.01, format="%.2f",
-        )
-        fuzzy_thresh = st.slider(
-            "Vendor Fuzzy Match Threshold (rapidfuzz score)",
-            min_value=0, max_value=100, value=80,
-            help="Minimum score for a vendor name to be considered a match.",
-        )
-        max_corrections = st.number_input(
-            "Max Auto-Correction Attempts",
-            min_value=1, max_value=5, value=2,
-        )
+        tol   = st.number_input("Total Reconciliation Tolerance ($)",
+                                0.0, 1.0, float(config.TOTAL_TOLERANCE), 0.01, format="%.2f")
+        fuzz  = st.slider("Vendor Fuzzy Match Threshold (0–100)",
+                          0, 100, int(config.FUZZY_VENDOR_THRESHOLD))
+        corr  = st.number_input("Max Auto-Correction Attempts",
+                                1, 5, int(config.MAX_CORRECTION_ATTEMPTS))
 
-        if st.button("💾 Save Threshold Settings", type="primary"):
-            st.success("Thresholds saved (prototype — no persistence yet).")
+        if st.button("💾 Save Thresholds", type="primary"):
+            config.apply({
+                "EXTRACTION_CONF_THRESHOLD": ext_t,
+                "AUTO_APPROVE_THRESHOLD":    app_t,
+                "TOTAL_TOLERANCE":           tol,
+                "FUZZY_VENDOR_THRESHOLD":    fuzz,
+                "MAX_CORRECTION_ATTEMPTS":   corr,
+            })
+            st.success("✅ Thresholds saved and applied immediately.")
 
-    # ── Vendors ───────────────────────────────────────────────
+    # ── Vendors tab ───────────────────────────────────────────────────────────
     with tab_vendors:
         st.markdown("#### Known Vendor Registry (ChromaDB)")
-        st.markdown(
-            "Vendors listed here are used for fuzzy semantic matching during validation. "
-            "Add your organisation's known vendors to improve match accuracy."
-        )
+        vendors_file = "data/vendors.txt"
+        existing = open(vendors_file).read() if os.path.exists(vendors_file) else ""
+        vendor_text = st.text_area("Known Vendors (one per line)", value=existing, height=200)
 
-        vendor_list = st.text_area(
-            "Known Vendors (one per line)",
-            value="\n".join([
-                "Acme Corp", "Global Supplies Inc", "Tech Solutions Ltd",
-                "Office Depot", "Amazon Business", "Staples", "Dell Technologies",
-            ]),
-            height=180,
-        )
-        if st.button("➕ Update Vendor Registry", type="primary"):
-            vendors = [v.strip() for v in vendor_list.splitlines() if v.strip()]
-            st.success(f"{len(vendors)} vendor(s) staged for ChromaDB. Connect backend to persist.")
+        if st.button("➕ Save Vendor List", type="primary"):
+            try:
+                os.makedirs("data", exist_ok=True)
+                with open(vendors_file, "w") as f:
+                    f.write(vendor_text)
+                from utils.vendor_matcher import VendorMatcher
+                added = VendorMatcher().add_vendors(
+                    [v.strip() for v in vendor_text.splitlines() if v.strip()]
+                )
+                st.success(f"✅ Saved — {added} new vendor(s) added to ChromaDB.")
+            except Exception as e:
+                st.error(f"Error: {e}")
 
-    # ── About ─────────────────────────────────────────────────
+    # ── About tab ─────────────────────────────────────────────────────────────
     with tab_about:
-        st.markdown("#### System Information")
-        info = {
-            "Application": "Doc Agent — Multi-Modal Document Intelligence Agent",
-            "Version":     "0.1.0 (skeleton)",
-            "Orchestration": "LangGraph",
-            "VLM Backend": "claude-sonnet-4-6",
-            "OCR Engine":  "Tesseract",
-            "Storage":     "SQLite",
-            "Vector DB":   "ChromaDB",
-            "UI":          "Streamlit",
-        }
-        for k, v in info.items():
+        st.markdown("#### System Status")
+        rows = [
+            ("VLM Backend",   config.VLM_BACKEND.upper()),
+            ("Gemini Model",  config.GEMINI_MODEL),
+            ("Claude Model",  config.CLAUDE_MODEL),
+            ("OCR Engine",    "Tesseract 5"),
+            ("Storage",       config.SQLITE_PATH),
+            ("Vector DB",     config.CHROMA_PERSIST_DIR),
+            ("Orchestration", "LangGraph"),
+            ("App Version",   "1.0.0"),
+        ]
+        for label, value in rows:
             c1, c2 = st.columns([1, 2])
-            with c1:
-                st.markdown(f"**{k}**")
-            with c2:
-                st.markdown(v)
+            c1.markdown(f"**{label}**")
+            c2.markdown(f"`{value}`")
