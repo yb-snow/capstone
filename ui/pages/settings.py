@@ -14,18 +14,36 @@ def render() -> None:
         st.markdown("#### Vision-Language Model")
         backend = st.selectbox(
             "VLM Backend",
-            ["claude (Cloud API — recommended)", "internvl (Local GPU)", "llava (Local GPU)"],
+            [
+                "gemini (Free — Google account only, recommended)",
+                "claude (Paid — Anthropic API key required)",
+                "internvl (Local GPU — no API key)",
+                "llava (Local GPU — no API key)",
+            ],
             index=0,
         )
 
-        if "claude" in backend:
-            api_key = st.text_input(
+        if "gemini" in backend:
+            st.info("Gemini API is **free** — get your key at [aistudio.google.com](https://aistudio.google.com/app/apikey). No credit card required.")
+            st.text_input(
+                "Gemini API Key",
+                type="password",
+                placeholder="AIza…",
+                help="Get your free key at aistudio.google.com",
+            )
+            st.selectbox(
+                "Gemini Model",
+                ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"],
+                index=0,
+            )
+        elif "claude" in backend:
+            st.text_input(
                 "Anthropic API Key",
                 type="password",
                 placeholder="sk-ant-…",
                 help="Get your key at console.anthropic.com",
             )
-            model = st.selectbox(
+            st.selectbox(
                 "Claude Model",
                 ["claude-sonnet-4-6", "claude-opus-4-7", "claude-haiku-4-5-20251001"],
                 index=0,
