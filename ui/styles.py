@@ -192,17 +192,40 @@ button[data-testid="baseButton-primary"]:hover {
 hr {border-color: #e2e8f0 !important;}
 
 /* ════════════════════════════════════════════════════════════
-   SIDEBAR — dark background, always light text
+   SIDEBAR — dark background set via config.toml (#1a2744)
+   CSS here just ensures text and buttons are always visible.
    ════════════════════════════════════════════════════════════ */
-[data-testid="stSidebar"]                     {background: #1a2744 !important;}
-[data-testid="stSidebar"] *                   {color: #e8edf5 !important;}
-[data-testid="stSidebar"] .stButton > button  {
-    color:      #e8edf5   !important;
-    background: rgba(255,255,255,.08) !important;
-    border:     1px solid rgba(255,255,255,.15) !important;
+
+/* Force all text inside sidebar to be light — belt AND braces */
+[data-testid="stSidebar"],
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] div,
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] a      {color: #e8edf5 !important;}
+
+/* Nav buttons — transparent background so dark sidebar shows through */
+[data-testid="stSidebar"] .stButton > button {
+    color:            #e8edf5                   !important;
+    background-color: rgba(255,255,255,0.07)    !important;
+    border:           1px solid rgba(255,255,255,0.12) !important;
+    border-radius:    8px                       !important;
+    font-weight:      500                       !important;
+    text-align:       left                      !important;
+    padding:          8px 14px                  !important;
+    margin:           2px 0                     !important;
+    width:            100%                      !important;
 }
 [data-testid="stSidebar"] .stButton > button:hover {
-    background: rgba(255,255,255,.16) !important;
+    background-color: rgba(255,255,255,0.15)    !important;
+    border-color:     rgba(255,255,255,0.3)     !important;
+    transform:        none                      !important;   /* disable lift effect in sidebar */
+}
+
+/* Sidebar collapse/expand arrow — keep it visible */
+[data-testid="collapsedControl"],
+button[data-testid="baseButton-headerNoPadding"] {
+    color: #1a2744 !important;
 }
 
 /* ════════════════════════════════════════════════════════════

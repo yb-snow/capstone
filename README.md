@@ -207,13 +207,13 @@ capstone/
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. System dependency: Tesseract
-brew install tesseract          # macOS
-# sudo apt install tesseract-ocr  # Ubuntu
+# 2. System dependencies
+brew install tesseract poppler   # macOS
+# sudo apt install tesseract-ocr poppler-utils  # Ubuntu / Colab
 
-# 3. Configure
+# 3. Configure — copy the example and fill in your API key
 cp .env.example .env
-# Edit .env — set ANTHROPIC_API_KEY
+# Open .env and set your GEMINI_API_KEY (see section below)
 
 # 4a. Launch UI
 streamlit run app.py
@@ -226,11 +226,51 @@ python main.py --list
 
 ---
 
+## ⚠️ API Key — Important Note for All Team Members
+
+> **Every team member must set their own API key in the `.env` file before running the app.**
+> The `.env` file is listed in `.gitignore` and is **never committed to GitHub** — each person
+> must create their own copy locally or in Colab.
+
+### Getting a free Gemini API key (2 minutes, no credit card)
+
+1. Go to **https://aistudio.google.com/app/apikey**
+2. Sign in with your **Google account** (the same one you use for Colab)
+3. Click **"Create API key"** → **"Create API key in new project"**
+4. Copy the key (starts with `AIza…`)
+5. Open your `.env` file and set:
+   ```
+   GEMINI_API_KEY=AIza...your_key_here
+   GEMINI_MODEL=gemini-flash-latest
+   VLM_BACKEND=gemini
+   ```
+
+### Rate limits (free tier)
+
+| Model | Requests/min | Requests/day |
+|-------|-------------|-------------|
+| `gemini-flash-latest` | 30 RPM | 1,500 RPD |
+
+> If you hit a rate limit, wait 60 seconds and try again.
+> Each person should use their **own API key** — sharing one key multiplies the usage and
+> causes rate limits faster.
+
+### Switching backends (no API key option)
+
+You can also run **100% locally** with no API key via the Settings page:
+- **🍎 Local MLX** — runs LLaVA on Apple M-chip (downloads ~4 GB once)
+- **🤗 moondream2** — tiny ~2 GB model, works on any hardware
+
+---
+
 ## VLM Backends
 
 | Backend | Config | Notes |
 |---------|--------|-------|
-| `claude` (default) | `ANTHROPIC_API_KEY` required | Best accuracy, cloud API |
+| `gemini` **(default)** | `GEMINI_API_KEY` — free at aistudio.google.com | Recommended |
+| `claude` | `ANTHROPIC_API_KEY` required | Paid, best accuracy |
+| `mlx` | No API key — Apple M-chip only | Downloads model on first use (~4 GB) |
+| `moondream` | No API key — any hardware | Tiny ~2 GB model, lower accuracy |
 | `internvl` | `LOCAL_VLM_MODEL=InternVL2-8B` | GPU required, runs locally |
 | `llava` | `LOCAL_VLM_MODEL=llava-7b` | GPU required, runs locally |
 
