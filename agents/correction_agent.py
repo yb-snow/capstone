@@ -8,11 +8,8 @@ from typing import Optional
 
 from PIL import Image
 
-from config import (
-    ANTHROPIC_API_KEY, CLAUDE_MODEL,
-    GEMINI_API_KEY, GEMINI_MODEL,
-    VLM_BACKEND,
-)
+import config
+from config import ANTHROPIC_API_KEY, CLAUDE_MODEL, GEMINI_API_KEY, GEMINI_MODEL
 from models.schemas import ExtractionResult, ValidationResult, ValidationStatus
 from pipeline.ocr import crop_region
 from utils.image_processing import image_to_base64
