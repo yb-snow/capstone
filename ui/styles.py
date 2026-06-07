@@ -222,46 +222,85 @@ hr {border-color: #e2e8f0 !important;}
     transform:        none                      !important;   /* disable lift effect in sidebar */
 }
 
-/* ── Sidebar collapse / expand toggle buttons ────────────────────────────── */
+/* ── Sidebar expand / collapse buttons ───────────────────────────────────── */
 
-/* ▶  Expand button — shown on the LEFT EDGE when sidebar is collapsed.
-      Lives outside the sidebar, on the light main background. */
-[data-testid="collapsedControl"]                  {
-    display:    block !important;
+/*
+ * Streamlit 1.35+ uses these data-testids:
+ *   stSidebarCollapsedControl  → the ▶ expand button shown when sidebar is CLOSED
+ *   stSidebarCollapseButton    → the ◀ collapse button shown INSIDE the sidebar
+ *
+ * Older names (kept for compatibility):
+ *   collapsedControl, baseButton-headerNoPadding
+ */
+
+/* ▶  EXPAND BUTTON — appears when sidebar is collapsed ───────────────────── */
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="collapsedControl"] {
+    display:    flex    !important;
     visibility: visible !important;
-    opacity:    1 !important;
-    position:   fixed !important;
-    top:        1rem !important;
-    left:       0.4rem !important;
-    z-index:    9999 !important;
-}
-[data-testid="collapsedControl"] button,
-[data-testid="collapsedControl"] svg {
-    color:      #1a2744   !important;
-    background: #ffffff   !important;
-    border:     1.5px solid #c7d2e7 !important;
-    border-radius: 8px   !important;
-    box-shadow: 0 2px 8px rgba(26,39,68,.15) !important;
-    opacity:    1        !important;
-    visibility: visible  !important;
-    width:      32px     !important;
-    height:     32px     !important;
-    padding:    4px      !important;
+    opacity:    1       !important;
+    position:   fixed   !important;
+    top:        12px    !important;
+    left:       12px    !important;
+    z-index:    99999   !important;
+    pointer-events: all !important;
 }
 
-/* ◀  Collapse button — shown INSIDE the sidebar header (dark background). */
+[data-testid="stSidebarCollapsedControl"] button,
+[data-testid="collapsedControl"] button {
+    display:          flex           !important;
+    align-items:      center         !important;
+    justify-content:  center         !important;
+    visibility:       visible        !important;
+    opacity:          1              !important;
+    width:            40px           !important;
+    height:           40px           !important;
+    min-width:        40px           !important;
+    background-color: #2563eb        !important;
+    color:            #ffffff        !important;
+    border:           none           !important;
+    border-radius:    10px           !important;
+    box-shadow:       0 4px 14px rgba(37,99,235,.45) !important;
+    cursor:           pointer        !important;
+    font-size:        1.1rem         !important;
+}
+[data-testid="stSidebarCollapsedControl"] button:hover,
+[data-testid="collapsedControl"] button:hover {
+    background-color: #1d4ed8 !important;
+    box-shadow: 0 6px 18px rgba(37,99,235,.55) !important;
+}
+[data-testid="stSidebarCollapsedControl"] svg,
+[data-testid="collapsedControl"] svg {
+    fill:   #ffffff !important;
+    color:  #ffffff !important;
+    stroke: #ffffff !important;
+    width:  18px    !important;
+    height: 18px    !important;
+}
+
+/* ◀  COLLAPSE BUTTON — inside the sidebar header ─────────────────────────── */
+[data-testid="stSidebarCollapseButton"]             {visibility: visible !important;}
 [data-testid="stSidebarCollapseButton"] button,
-button[data-testid="baseButton-headerNoPadding"] {
-    color:      #e8edf5               !important;
-    background: rgba(255,255,255,.12) !important;
-    border:     1px solid rgba(255,255,255,.25) !important;
-    border-radius: 6px               !important;
-    opacity:    1                    !important;
-    visibility: visible              !important;
+button[data-testid="baseButton-headerNoPadding"]    {
+    display:          flex              !important;
+    visibility:       visible           !important;
+    opacity:          1                 !important;
+    color:            #e8edf5           !important;
+    background-color: rgba(255,255,255,.1) !important;
+    border:           1px solid rgba(255,255,255,.2) !important;
+    border-radius:    7px               !important;
+    width:            34px              !important;
+    height:           34px              !important;
 }
 [data-testid="stSidebarCollapseButton"] button:hover,
 button[data-testid="baseButton-headerNoPadding"]:hover {
-    background: rgba(255,255,255,.25) !important;
+    background-color: rgba(255,255,255,.22) !important;
+}
+[data-testid="stSidebarCollapseButton"] svg,
+button[data-testid="baseButton-headerNoPadding"] svg {
+    fill:   #e8edf5 !important;
+    color:  #e8edf5 !important;
+    stroke: #e8edf5 !important;
 }
 
 /* ════════════════════════════════════════════════════════════
