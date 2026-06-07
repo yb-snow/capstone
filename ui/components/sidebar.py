@@ -6,6 +6,7 @@ _NAV = [
     ("🔄", "Process Document", ),
     ("👁️", "Review Queue",     ),
     ("📋", "History",          ),
+    ("🛠️", "Tech Stack",       ),
     ("⚙️", "Settings",         ),
 ]
 

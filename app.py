@@ -15,6 +15,7 @@ import ui.pages.dashboard as dashboard_page
 import ui.pages.process as process_page
 import ui.pages.review as review_page
 import ui.pages.history as history_page
+import ui.pages.techstack as techstack_page
 import ui.pages.settings as settings_page
 from ui.components.sidebar import render_sidebar
 
@@ -31,6 +32,7 @@ _PAGES = {
     "Process Document": process_page.render,
     "Review Queue":     review_page.render,
     "History":          history_page.render,
+    "Tech Stack":       techstack_page.render,
     "Settings":         settings_page.render,
 }
 
