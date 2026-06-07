@@ -222,85 +222,47 @@ hr {border-color: #e2e8f0 !important;}
     transform:        none                      !important;   /* disable lift effect in sidebar */
 }
 
-/* ── Sidebar expand / collapse buttons ───────────────────────────────────── */
+/* ── Sidebar: hide collapse button so it cannot be accidentally closed ───── */
+/* The sidebar is always visible. JavaScript in sidebar.py auto-expands it
+   if the browser remembers a collapsed state from a previous session.      */
+[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebarCollapseButton"] button,
+button[data-testid="baseButton-headerNoPadding"] {
+    display: none !important;
+}
 
-/*
- * Streamlit 1.35+ uses these data-testids:
- *   stSidebarCollapsedControl  → the ▶ expand button shown when sidebar is CLOSED
- *   stSidebarCollapseButton    → the ◀ collapse button shown INSIDE the sidebar
- *
- * Older names (kept for compatibility):
- *   collapsedControl, baseButton-headerNoPadding
- */
-
-/* ▶  EXPAND BUTTON — appears when sidebar is collapsed ───────────────────── */
+/* ▶  Expand button — shown when sidebar is already collapsed.
+      Style it as a clearly visible blue pill so users can recover.        */
 [data-testid="stSidebarCollapsedControl"],
 [data-testid="collapsedControl"] {
-    display:    flex    !important;
-    visibility: visible !important;
-    opacity:    1       !important;
-    position:   fixed   !important;
-    top:        12px    !important;
-    left:       12px    !important;
-    z-index:    99999   !important;
-    pointer-events: all !important;
+    display:        flex    !important;
+    visibility:     visible !important;
+    opacity:        1       !important;
+    z-index:        99999   !important;
+    pointer-events: all     !important;
 }
-
 [data-testid="stSidebarCollapsedControl"] button,
 [data-testid="collapsedControl"] button {
-    display:          flex           !important;
-    align-items:      center         !important;
-    justify-content:  center         !important;
-    visibility:       visible        !important;
-    opacity:          1              !important;
-    width:            40px           !important;
-    height:           40px           !important;
-    min-width:        40px           !important;
-    background-color: #2563eb        !important;
-    color:            #ffffff        !important;
-    border:           none           !important;
-    border-radius:    10px           !important;
-    box-shadow:       0 4px 14px rgba(37,99,235,.45) !important;
-    cursor:           pointer        !important;
-    font-size:        1.1rem         !important;
-}
-[data-testid="stSidebarCollapsedControl"] button:hover,
-[data-testid="collapsedControl"] button:hover {
-    background-color: #1d4ed8 !important;
-    box-shadow: 0 6px 18px rgba(37,99,235,.55) !important;
+    display:          flex    !important;
+    align-items:      center  !important;
+    justify-content:  center  !important;
+    visibility:       visible !important;
+    opacity:          1       !important;
+    min-width:        44px    !important;
+    min-height:       44px    !important;
+    background-color: #2563eb !important;
+    color:            #ffffff !important;
+    border:           none    !important;
+    border-radius:    10px    !important;
+    box-shadow:       0 4px 16px rgba(37,99,235,.5) !important;
+    cursor:           pointer !important;
 }
 [data-testid="stSidebarCollapsedControl"] svg,
 [data-testid="collapsedControl"] svg {
     fill:   #ffffff !important;
-    color:  #ffffff !important;
     stroke: #ffffff !important;
-    width:  18px    !important;
-    height: 18px    !important;
-}
-
-/* ◀  COLLAPSE BUTTON — inside the sidebar header ─────────────────────────── */
-[data-testid="stSidebarCollapseButton"]             {visibility: visible !important;}
-[data-testid="stSidebarCollapseButton"] button,
-button[data-testid="baseButton-headerNoPadding"]    {
-    display:          flex              !important;
-    visibility:       visible           !important;
-    opacity:          1                 !important;
-    color:            #e8edf5           !important;
-    background-color: rgba(255,255,255,.1) !important;
-    border:           1px solid rgba(255,255,255,.2) !important;
-    border-radius:    7px               !important;
-    width:            34px              !important;
-    height:           34px              !important;
-}
-[data-testid="stSidebarCollapseButton"] button:hover,
-button[data-testid="baseButton-headerNoPadding"]:hover {
-    background-color: rgba(255,255,255,.22) !important;
-}
-[data-testid="stSidebarCollapseButton"] svg,
-button[data-testid="baseButton-headerNoPadding"] svg {
-    fill:   #e8edf5 !important;
-    color:  #e8edf5 !important;
-    stroke: #e8edf5 !important;
+    width:  20px    !important;
+    height: 20px    !important;
 }
 
 /* ════════════════════════════════════════════════════════════
