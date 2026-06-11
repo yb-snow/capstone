@@ -69,15 +69,30 @@ def run(image: Image.Image, ocr_text: str) -> ExtractionResult:
 def _extract_with_gemini(image: Image.Image, ocr_text: str) -> ExtractionResult:
     from google import genai
     from google.genai import types
+    import time
 
     client   = genai.Client(api_key=GEMINI_API_KEY)
     prompt   = _PROMPT.format(ocr_text=ocr_text[:4000])
 
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=[image, prompt],
-        config=types.GenerateContentConfig(max_output_tokens=4096, temperature=0.1),
-    )
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=[image, prompt],
+                config=types.GenerateContentConfig(
+                    max_output_tokens=2048,
+                    temperature=0.1,
+                ),
+            )
+            break
+
+        except Exception as e:
+            print(f"Retry {attempt+1}/3:", e)
+
+            if attempt == 2:
+                raise e
+
+            time.sleep(20)
     return _build_result(ocr_text, response.text)
 
 
